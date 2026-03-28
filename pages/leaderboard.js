@@ -58,7 +58,7 @@ export default function Leaderboard() {
         <div style={{ marginBottom: 32 }}>
           <p className="mono text-muted" style={{ fontSize: 12, marginBottom: 8, letterSpacing: '0.1em' }}>LIVE RANKINGS</p>
           <h1 style={{ fontSize: 36, marginBottom: 8 }}>Leaderboard</h1>
-          <p style={{ color: 'var(--text2)', fontSize: 14 }}>Updates after each round's results are entered.</p>
+          <p style={{ color: 'var(--text2)', fontSize: 14 }}>Updates after each round's results are entered. Draw = 1 pt · Correct win = 4 pts.</p>
         </div>
 
         {/* Round filter */}

@@ -1,7 +1,7 @@
 # ♟ FIDE Candidates 2026 — Prediction Contest
 
 A web app for running a chess prediction contest across 14 rounds.
-Participants predict results of 4 boards per day. Draws = 1pt, correct wins = 4pts.
+Participants predict results of 4 boards per day. Draws = 1pt, correct wins = 3pts.
 
 ---
 

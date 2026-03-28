@@ -235,7 +235,7 @@ export default function Home() {
             Daily Prediction Contest
           </h1>
           <p style={{ color: 'var(--text2)', maxWidth: 520, lineHeight: 1.6 }}>
-            Predict the result of each board every day. Correct draw = 1 point. Correct win = 3 points.
+            Predict the result of each board every day. Correct draw = 1 point. Correct win = 4 points.
             Best predictor after 14 rounds wins.
           </p>
         </div>

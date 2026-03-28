@@ -273,7 +273,7 @@ export default function Admin() {
         {/* ── RESULTS ── */}
         {tab === 'results' && (<>
           <h2 style={{ fontFamily: 'Playfair Display', marginBottom: 8 }}>Enter Results</h2>
-          <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 24 }}>Click a result — points are calculated and saved instantly.</p>
+          <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 24 }}>Click a result — points are calculated and saved instantly. Draw = 1 pt, Win = 4 pts.</p>
           {rounds.map(round => (
             <div key={round.id} style={s.card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
