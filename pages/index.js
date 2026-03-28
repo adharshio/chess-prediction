@@ -256,7 +256,7 @@ export default function Home() {
             <form onSubmit={handleRegister}>
               <div style={{ marginBottom: 16 }}>
                 <label>Your name</label>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Vishy Fan" required />
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="Your Name" required />
               </div>
               <div style={{ marginBottom: 24 }}>
                 <label>Email address</label>
