@@ -141,7 +141,7 @@ export default function Admin() {
       const { data: preds } = await supabase.from('predictions').select('id, prediction').eq('game_id', gameId)
       if (preds) {
         for (const p of preds) {
-          const pts = p.prediction === result ? (result === 'draw' ? 1 : 3) : 0
+          const pts = p.prediction === result ? (result === 'draw' ? 1 : 4) : 0
           await supabase.from('predictions').update({ points_earned: pts }).eq('id', p.id)
         }
       }

@@ -403,9 +403,9 @@ export default function Home() {
                   {/* Prediction buttons */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                     {[
-                      { value: 'white', label: game.white_player?.name?.split(' ').pop() || 'White', sublabel: 'White wins', pts: '3 pts' },
+                      { value: 'white', label: game.white_player?.name?.split(' ').pop() || 'White', sublabel: 'White wins', pts: '4 pts' },
                       { value: 'draw', label: 'Draw', sublabel: '½–½', pts: '1 pt' },
-                      { value: 'black', label: game.black_player?.name?.split(' ').pop() || 'Black', sublabel: 'Black wins', pts: '3 pts' },
+                      { value: 'black', label: game.black_player?.name?.split(' ').pop() || 'Black', sublabel: 'Black wins', pts: '4 pts' },
                     ].map(opt => {
                       const selected = pred === opt.value
                       const wasSelected = saved === opt.value
