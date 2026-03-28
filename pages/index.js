@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import Nav from '../components/Nav'
 import { format, isBefore } from 'date-fns'
@@ -11,6 +11,13 @@ export default function Home() {
 
   const [round, setRound] = useState(null)
   const [games, setGames] = useState([])
+
+  // deadline is stored as a Date object so we can compare it in the interval
+  const [deadline, setDeadline] = useState(null)
+  const [isComplete, setIsComplete] = useState(false)
+
+  // locked is derived every tick — NOT set once on load
+  // true if: round is_complete OR current time is past deadline
   const [locked, setLocked] = useState(false)
 
   const [predictions, setPredictions] = useState({})
@@ -22,9 +29,22 @@ export default function Home() {
   const [error, setError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
 
-  // ── Bug 1 fix: fetch the current active round properly ──
-  // Logic: find the lowest round_number that is NOT marked complete.
-  // This handles Round 1 complete → Round 2 shows up correctly.
+  const intervalRef = useRef(null)
+
+  // ── Re-evaluate locked every 10 seconds based on CURRENT time ──
+  // This is the key fix: locked is recalculated continuously, not just on load
+  useEffect(() => {
+    function checkLock() {
+      const now = new Date()
+      const deadlinePassed = deadline ? isBefore(deadline, now) : false
+      setLocked(isComplete || deadlinePassed)
+    }
+
+    checkLock() // run immediately
+    intervalRef.current = setInterval(checkLock, 10000) // re-check every 10s
+    return () => clearInterval(intervalRef.current)
+  }, [deadline, isComplete])
+
   const loadRound = useCallback(async () => {
     setPageLoading(true)
 
@@ -37,7 +57,6 @@ export default function Home() {
       .single()
 
     if (!roundData) {
-      // All rounds complete or none exist — show most recent completed round
       const { data: lastRound } = await supabase
         .from('rounds')
         .select('*')
@@ -55,7 +74,7 @@ export default function Home() {
     setPageLoading(false)
   }, [])
 
-  async function enrichAndSetRound(roundData, forcelock) {
+  async function enrichAndSetRound(roundData, forceComplete) {
     const { data: gamesData } = await supabase
       .from('games')
       .select('*')
@@ -78,9 +97,9 @@ export default function Home() {
     setRound(roundData)
     setGames(enriched)
 
-    // Bug 3 fix: lock if admin marked complete OR deadline has passed
-    const deadlinePassed = isBefore(new Date(roundData.prediction_deadline), new Date())
-    setLocked(forcelock || roundData.is_complete || deadlinePassed)
+    // Store deadline as Date object — the interval will compare against it continuously
+    setDeadline(roundData.prediction_deadline ? new Date(roundData.prediction_deadline) : null)
+    setIsComplete(forceComplete || roundData.is_complete || false)
   }
 
   useEffect(() => {
@@ -108,7 +127,6 @@ export default function Home() {
       .select('game_id, prediction, points_earned')
       .eq('participant_id', participant.id)
       .in('game_id', gameIds)
-
     const map = {}
     if (data) data.forEach(p => { map[p.game_id] = p.prediction })
     setSavedPreds(map)
@@ -148,12 +166,21 @@ export default function Home() {
   }
 
   function pick(gameId, value) {
-    if (locked) return
+    // Double-check lock at moment of click — not just from state
+    const nowLocked = isComplete || (deadline ? isBefore(deadline, new Date()) : false)
+    if (nowLocked) return
     if (Object.keys(savedPreds).length > 0 && !editing) return
     setPredictions(prev => ({ ...prev, [gameId]: value }))
   }
 
   async function handleSubmit() {
+    // Final server-side guard: re-check deadline at submit time
+    const nowLocked = isComplete || (deadline ? isBefore(deadline, new Date()) : false)
+    if (nowLocked) {
+      setError('The prediction window has closed. Your picks could not be saved.')
+      return
+    }
+
     const picked = Object.keys(predictions).length
     if (picked < games.length) {
       setError(`Please predict all ${games.length} boards. You've picked ${picked}/${games.length}.`)
@@ -173,7 +200,6 @@ export default function Home() {
         .from('predictions')
         .upsert(rows, { onConflict: 'participant_id,game_id' })
       if (upsertErr) throw upsertErr
-
       setSavedPreds({ ...predictions })
       setEditing(false)
       setSaveSuccess(true)
@@ -193,19 +219,13 @@ export default function Home() {
   const hasSaved = Object.keys(savedPreds).length > 0
   const hasChanges = JSON.stringify(predictions) !== JSON.stringify(savedPreds)
   const allPicked = Object.keys(predictions).length === games.length
-  const deadline = round ? new Date(round.prediction_deadline) : null
 
   const optStyle = (selected, isCorrect, isWrong) => ({
     padding: '13px 8px',
     borderRadius: 8,
     border: selected ? '2px solid var(--gold)' : '1px solid var(--border)',
-    background: isCorrect
-      ? 'rgba(76,175,120,0.15)'
-      : isWrong ? 'rgba(224,85,85,0.08)'
-      : selected ? 'var(--gold-dim)' : 'var(--bg3)',
-    color: isCorrect ? 'var(--green)'
-      : isWrong ? 'var(--red)'
-      : selected ? 'var(--gold-light)' : 'var(--text2)',
+    background: isCorrect ? 'rgba(76,175,120,0.15)' : isWrong ? 'rgba(224,85,85,0.08)' : selected ? 'var(--gold-dim)' : 'var(--bg3)',
+    color: isCorrect ? 'var(--green)' : isWrong ? 'var(--red)' : selected ? 'var(--gold-light)' : 'var(--text2)',
     cursor: (locked || (hasSaved && !editing)) ? 'default' : 'pointer',
     textAlign: 'center',
     transition: 'all 0.15s',
@@ -216,17 +236,13 @@ export default function Home() {
     <>
       <Nav />
       <div className="container" style={{ padding: '40px 20px' }}>
-
         <div style={{ marginBottom: 40 }}>
           <p className="mono text-muted" style={{ fontSize: 12, marginBottom: 8, letterSpacing: '0.1em' }}>
             FIDE CANDIDATES TOURNAMENT 2026
           </p>
-          <h1 style={{ fontSize: 36, lineHeight: 1.1, marginBottom: 12 }}>
-            Daily Prediction Contest
-          </h1>
+          <h1 style={{ fontSize: 36, lineHeight: 1.1, marginBottom: 12 }}>Daily Prediction Contest</h1>
           <p style={{ color: 'var(--text2)', maxWidth: 520, lineHeight: 1.6 }}>
-            Predict the result of each board every day. Correct draw = 1 point. Correct win = 4 points.
-            Best predictor after 14 rounds wins.
+            Predict the result of each board every day. Correct draw = 1 point. Correct win = 4 points. Best predictor after 14 rounds wins.
           </p>
         </div>
 
@@ -259,7 +275,6 @@ export default function Home() {
         {/* ── PREDICT ── */}
         {step === 'predict' && (
           <div>
-            {/* Round header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
               <div>
                 {pageLoading ? (
@@ -271,17 +286,15 @@ export default function Home() {
                       <span className="mono text-muted" style={{ fontSize: 14, fontWeight: 400 }}>
                         {format(new Date(round.round_date + 'T12:00:00'), 'EEE, MMM d')}
                       </span>
-                      {round.is_complete && (
-                        <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 20, background: 'rgba(76,175,120,0.12)', color: 'var(--green)' }}>Complete</span>
-                      )}
+                      {isComplete && <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 20, background: 'rgba(76,175,120,0.12)', color: 'var(--green)' }}>Complete</span>}
                     </h2>
                     {locked ? (
                       <p style={{ fontSize: 13, color: 'var(--red)', marginTop: 6 }}>
-                        🔒 {round.is_complete ? 'This round is complete — no more changes' : 'Predictions are locked — round has started'}
+                        🔒 {isComplete ? 'This round is complete' : 'Prediction window has closed'}
                       </p>
                     ) : (
                       <p style={{ fontSize: 13, color: 'var(--gold)', marginTop: 6 }}>
-                        ⏰ Predictions lock at {format(deadline, 'h:mm a, MMM d')}
+                        ⏰ Predictions lock at {deadline ? format(deadline, 'h:mm a, MMM d') : '—'}
                       </p>
                     )}
                   </>
@@ -302,20 +315,16 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Save success */}
             {saveSuccess && (
               <div style={{ marginBottom: 20, padding: '12px 16px', borderRadius: 8, background: 'rgba(76,175,120,0.12)', border: '1px solid rgba(76,175,120,0.3)', color: 'var(--green)', fontSize: 14 }}>
                 ✓ Predictions saved!
               </div>
             )}
 
-            {/* Saved banner + change button */}
             {hasSaved && !editing && !locked && round && (
               <div style={{ marginBottom: 20, padding: '14px 18px', borderRadius: 8, background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <div>
-                  <p style={{ color: 'var(--gold-light)', fontWeight: 500, fontSize: 14 }}>
-                    ✓ Your predictions are saved ({Object.keys(savedPreds).length}/{games.length} boards)
-                  </p>
+                  <p style={{ color: 'var(--gold-light)', fontWeight: 500, fontSize: 14 }}>✓ Your predictions are saved ({Object.keys(savedPreds).length}/{games.length} boards)</p>
                   <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: 3 }}>You can change your picks until the round locks.</p>
                 </div>
                 <button onClick={() => { setEditing(true); setSaveSuccess(false); }}
@@ -325,7 +334,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Editing banner */}
             {editing && !locked && (
               <div style={{ marginBottom: 20, padding: '12px 18px', borderRadius: 8, background: 'rgba(224,85,85,0.08)', border: '1px solid rgba(224,85,85,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <p style={{ color: 'var(--red)', fontSize: 14 }}>✏ Editing mode — make changes then hit Save.</p>
@@ -333,53 +341,43 @@ export default function Home() {
               </div>
             )}
 
-            {/* No games yet */}
             {!pageLoading && round && games.length === 0 && (
               <div className="card" style={{ textAlign: 'center', padding: '50px 24px', color: 'var(--text2)' }}>
                 <p style={{ fontSize: 36, marginBottom: 12 }}>♟</p>
                 <p style={{ fontSize: 16 }}>Board pairings haven't been set yet.</p>
-                <p style={{ fontSize: 13, marginTop: 6, color: 'var(--text3)' }}>The admin will add them shortly.</p>
               </div>
             )}
 
-            {/* Game cards */}
             {games.map((game) => {
               const pred = predictions[game.id]
               const saved = savedPreds[game.id]
               const hasResult = !!game.result
               const opts = [
                 { value: 'white', label: game.white_player?.name?.split(' ').pop() || 'White', sublabel: 'White wins', pts: '4 pts' },
-                { value: 'draw',  label: 'Draw', sublabel: '½–½', pts: '1 pt' },
+                { value: 'draw', label: 'Draw', sublabel: '½–½', pts: '1 pt' },
                 { value: 'black', label: game.black_player?.name?.split(' ').pop() || 'Black', sublabel: 'Black wins', pts: '4 pts' },
               ]
-
               return (
                 <div key={game.id} className="card" style={{ marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                     <span className="mono" style={{ fontSize: 11, color: 'var(--text3)', letterSpacing: '0.08em' }}>BOARD {game.board_number}</span>
-                    {hasResult ? (
-                      game.result === 'white' ? <span className="badge-white">White wins</span>
-                      : game.result === 'black' ? <span className="badge-black">Black wins</span>
-                      : <span className="badge-draw">Draw ½–½</span>
-                    ) : <span className="badge-pending">Pending</span>}
+                    {hasResult
+                      ? game.result === 'white' ? <span className="badge-white">White wins</span>
+                        : game.result === 'black' ? <span className="badge-black">Black wins</span>
+                        : <span className="badge-draw">Draw ½–½</span>
+                      : <span className="badge-pending">Pending</span>}
                   </div>
-
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, marginBottom: 18 }}>
                     <div>
-                      <p style={{ fontSize: 17, fontFamily: 'Playfair Display', fontWeight: 700 }}>
-                        {game.white_player?.flag} {game.white_player?.name || '?'}
-                      </p>
+                      <p style={{ fontSize: 17, fontFamily: 'Playfair Display', fontWeight: 700 }}>{game.white_player?.flag} {game.white_player?.name || '?'}</p>
                       <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>White</p>
                     </div>
                     <span style={{ color: 'var(--text3)', fontSize: 16 }}>vs</span>
                     <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: 17, fontFamily: 'Playfair Display', fontWeight: 700 }}>
-                        {game.black_player?.name || '?'} {game.black_player?.flag}
-                      </p>
+                      <p style={{ fontSize: 17, fontFamily: 'Playfair Display', fontWeight: 700 }}>{game.black_player?.name || '?'} {game.black_player?.flag}</p>
                       <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>Black</p>
                     </div>
                   </div>
-
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                     {opts.map(opt => {
                       const selected = pred === opt.value
@@ -399,7 +397,6 @@ export default function Home() {
                       )
                     })}
                   </div>
-
                   {locked && !saved && (
                     <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 10, textAlign: 'center' }}>
                       You didn't predict this board before the deadline.
@@ -409,7 +406,6 @@ export default function Home() {
               )
             })}
 
-            {/* Submit button */}
             {round && !locked && games.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 {error && <p style={{ color: 'var(--red)', fontSize: 14, marginBottom: 12 }}>{error}</p>}
@@ -437,7 +433,7 @@ export default function Home() {
             {locked && hasSaved && round && (
               <div style={{ marginTop: 8, textAlign: 'center', padding: '16px', background: 'var(--bg2)', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <p style={{ color: 'var(--text2)', fontSize: 14 }}>
-                  🔒 {round.is_complete ? 'Round complete' : 'Round locked'} · Your predictions are in · Good luck!
+                  🔒 {isComplete ? 'Round complete' : 'Round locked'} · Your predictions are in · Good luck!
                 </p>
               </div>
             )}
