@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #0a0a0a;
+  --bg2: #111111;
+  --bg3: #1a1a1a;
+  --border: rgba(255,255,255,0.08);
+  --border-hover: rgba(255,255,255,0.18);
+  --text: #f0ede8;
+  --text2: #8a8680;
+  --text3: #555250;
+  --gold: #c9a84c;
+  --gold-light: #e8c97a;
+  --gold-dim: rgba(201,168,76,0.12);
+  --white-win: #e8f4e8;
+  --white-win-text: #1a4a1a;
+  --black-win: #1a1a1a;
+  --black-win-text: #f0ede8;
+  --draw: #2a2a3a;
+  --draw-text: #9090c0;
+  --green: #4caf78;
+  --red: #e05555;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; }
+
+body { min-height: 100vh; background: var(--bg); }
+
+h1, h2, h3 { font-family: 'Playfair Display', serif; }
+
+.mono { font-family: 'DM Mono', monospace; }
+
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: var(--gold-light); }
+
+.container { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+
+/* Cards */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+/* Buttons */
+button, .btn {
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-gold {
+  background: var(--gold);
+  color: #0a0a0a;
+}
+.btn-gold:hover { background: var(--gold-light); }
+.btn-gold:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-hover);
+  color: var(--text);
+}
+.btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  padding: 6px 12px;
+}
+.btn-ghost:hover { color: var(--text); }
+
+/* Inputs */
+input, select {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus { border-color: var(--gold); }
+input::placeholder { color: var(--text3); }
+select option { background: var(--bg3); }
+
+label {
+  display: block;
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+/* Nav */
+.nav {
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+  position: sticky;
+  top: 0;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+}
+
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.nav-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-links { display: flex; gap: 24px; }
+.nav-links a { font-size: 14px; color: var(--text2); transition: color 0.15s; }
+.nav-links a:hover, .nav-links a.active { color: var(--text); }
+
+/* Result badges */
+.badge-white { background: var(--white-win); color: var(--white-win-text); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 500; }
+.badge-black { background: #2a2a2a; color: #ccc; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 500; border: 1px solid #444; }
+.badge-draw { background: var(--draw); color: var(--draw-text); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 500; }
+.badge-pending { background: transparent; color: var(--text3); border-radius: 4px; padding: 2px 8px; font-size: 12px; border: 1px dashed var(--border-hover); }
+
+/* Status */
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-gold { color: var(--gold); }
+.text-muted { color: var(--text2); }
+
+/* Rank numbers */
+.rank-1 { color: #ffd700; }
+.rank-2 { color: #c0c0c0; }
+.rank-3 { color: #cd7f32; }
