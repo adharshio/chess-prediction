@@ -34,19 +34,49 @@ export default function Home() {
 
   async function loadCurrentRound() {
     const today = new Date().toISOString().split('T')[0]
-    const { data, error } = await supabase
+
+    // Step 1: get the round
+    const { data: roundData, error: roundErr } = await supabase
       .from('rounds')
-      .select('*, games(*, white_player:chess_players!games_white_player_id_fkey(*), black_player:chess_players!games_black_player_id_fkey(*))')
+      .select('*')
       .gte('round_date', today)
       .order('round_number', { ascending: true })
       .limit(1)
       .single()
 
-    if (data) {
-      setRound(data)
-      setGames(data.games.sort((a, b) => a.board_number - b.board_number))
-      setLocked(isBefore(new Date(data.prediction_deadline), new Date()))
+    if (roundErr || !roundData) return
+
+    // Step 2: get games for that round
+    const { data: gamesData, error: gamesErr } = await supabase
+      .from('games')
+      .select('*')
+      .eq('round_id', roundData.id)
+      .order('board_number')
+
+    if (gamesErr || !gamesData) {
+      setRound(roundData)
+      setGames([])
+      setLocked(isBefore(new Date(roundData.prediction_deadline), new Date()))
+      return
     }
+
+    // Step 3: get all chess players and map them in
+    const { data: playersData } = await supabase
+      .from('chess_players')
+      .select('*')
+
+    const playerMap = {}
+    if (playersData) playersData.forEach(p => { playerMap[p.id] = p })
+
+    const enrichedGames = gamesData.map(g => ({
+      ...g,
+      white_player: playerMap[g.white_player_id] || null,
+      black_player: playerMap[g.black_player_id] || null,
+    }))
+
+    setRound(roundData)
+    setGames(enrichedGames)
+    setLocked(isBefore(new Date(roundData.prediction_deadline), new Date()))
   }
 
   async function loadExistingPredictions() {

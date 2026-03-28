@@ -57,14 +57,14 @@ CREATE TABLE predictions (
 -- Seed the 8 Candidates players
 -- =============================================
 INSERT INTO chess_players (name, country, flag, display_order) VALUES
-  ('Wei Yi', 'China', '🇨🇳', 1),
+  ('D. Gukesh', 'India', '🇮🇳', 1),
   ('Fabiano Caruana', 'USA', '🇺🇸', 2),
   ('Hikaru Nakamura', 'USA', '🇺🇸', 3),
   ('R. Praggnanandhaa', 'India', '🇮🇳', 4),
-  ('Javokhir Sindarov', 'Uzbekistan', '🇺🇿', 5),
-  ('Anish Giri', 'Netherlands', '🇳🇱', 6),
-  ('Andrey Esipenko', 'Russia', '🇷🇺', 7),
-  ('Matthias Blübaum', 'Germany', '🇩🇪', 8);
+  ('Alireza Firouzja', 'France', '🇫🇷', 5),
+  ('Ian Nepomniachtchi', 'Russia', '🏳️', 6),
+  ('Vidit Gujrathi', 'India', '🇮🇳', 7),
+  ('Nodirbek Abdusattorov', 'Uzbekistan', '🇺🇿', 8);
 
 -- =============================================
 -- Row Level Security (RLS)

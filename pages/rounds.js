@@ -10,18 +10,37 @@ export default function Rounds() {
   useEffect(() => { loadRounds() }, [])
 
   async function loadRounds() {
-    const { data } = await supabase
+    const { data: roundsData } = await supabase
       .from('rounds')
-      .select(`
-        *,
-        games(
-          *,
-          white_player:chess_players!games_white_player_id_fkey(*),
-          black_player:chess_players!games_black_player_id_fkey(*)
-        )
-      `)
+      .select('*')
       .order('round_number')
-    if (data) setRounds(data)
+
+    if (!roundsData) { setLoading(false); return }
+
+    const { data: gamesData } = await supabase
+      .from('games')
+      .select('*')
+      .order('board_number')
+
+    const { data: playersData } = await supabase
+      .from('chess_players')
+      .select('*')
+
+    const playerMap = {}
+    if (playersData) playersData.forEach(p => { playerMap[p.id] = p })
+
+    const enriched = roundsData.map(r => ({
+      ...r,
+      games: (gamesData || [])
+        .filter(g => g.round_id === r.id)
+        .map(g => ({
+          ...g,
+          white_player: playerMap[g.white_player_id] || null,
+          black_player: playerMap[g.black_player_id] || null,
+        }))
+    }))
+
+    setRounds(enriched)
     setLoading(false)
   }
 
