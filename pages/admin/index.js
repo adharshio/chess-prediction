@@ -2,22 +2,33 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { adminAction } from '../../lib/adminApi'
 
-// ── Auth: stores password in sessionStorage so API can use it ──
+// ── Auth ──
 function useAdmin() {
   const [auth, setAuth] = useState(false)
   const [pw, setPw] = useState('')
+  const [authError, setAuthError] = useState('')
 
-  const check = async () => {
-    // Test the password against the API before granting access
+  const check = async (currentPw) => {
+    const password = currentPw !== undefined ? currentPw : pw
+    if (!password) { setAuthError('Enter a password.'); return }
+    sessionStorage.setItem('adminPw', password)
     try {
-      await adminAction('markRoundComplete', { id: 'test', complete: false }).catch(() => {})
-      // If we get a 401, the fetch throws. Any other error means password was accepted.
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': password },
+        body: JSON.stringify({ action: 'ping', payload: {} }),
+      })
+      if (res.status === 401) {
+        sessionStorage.removeItem('adminPw')
+        setAuthError('Wrong password. Try again.')
+        return
+      }
+      setAuth(true)
+      setAuthError('')
     } catch (e) {
-      if (e.message === 'Unauthorized') { alert('Wrong password'); return }
+      setAuthError('Could not connect. Try again.')
+      sessionStorage.removeItem('adminPw')
     }
-    // Actually just verify locally — the API will reject bad tokens on every call
-    sessionStorage.setItem('adminPw', pw)
-    setAuth(true)
   }
 
   useEffect(() => {
@@ -25,7 +36,7 @@ function useAdmin() {
     if (saved) { setPw(saved); setAuth(true) }
   }, [])
 
-  return { auth, pw, setPw, check }
+  return { auth, pw, setPw, check, authError }
 }
 
 const EMPTY_BOARDS = () => [1,2,3,4].map(n => ({ board_number: n, white_player_id: '', black_player_id: '' }))
@@ -43,7 +54,7 @@ function displayLocalTime(utcStr) {
 }
 
 export default function Admin() {
-  const { auth, pw, setPw, check } = useAdmin()
+  const { auth, pw, setPw, check, authError } = useAdmin()
   const [tab, setTab] = useState('rounds')
   const [rounds, setRounds] = useState([])
   const [players, setPlayers] = useState([])
@@ -246,8 +257,9 @@ export default function Admin() {
         <h2 style={{ fontFamily: 'Playfair Display', marginBottom: 6 }}>♟ Admin Panel</h2>
         <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 20 }}>Enter your admin password to continue.</p>
         <label style={s.lbl}>Password</label>
-        <Inp type="password" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && check()} placeholder="Admin password" style={{ ...s.inp, marginBottom: 16 }} />
-        <button onClick={check} style={{ width: '100%', padding: 12, background: 'var(--gold)', border: 'none', borderRadius: 8, fontFamily: 'DM Sans', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Enter</button>
+        <Inp type="password" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && check(e.target.value)} placeholder="Admin password" style={{ ...s.inp, marginBottom: authError ? 8 : 16 }} />
+        {authError && <p style={{ fontSize: 13, color: 'var(--red)', marginBottom: 12 }}>{authError}</p>}
+        <button onClick={() => check(pw)} style={{ width: '100%', padding: 12, background: 'var(--gold)', border: 'none', borderRadius: 8, fontFamily: 'DM Sans', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Enter</button>
       </div>
     </div>
   )

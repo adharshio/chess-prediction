@@ -30,6 +30,10 @@ export default async function handler(req, res) {
   try {
     switch (action) {
 
+      case 'ping':
+        return res.json({ ok: true })
+
+
       // ── Rounds ──
       case 'createRound': {
         const { round_number, round_date, prediction_deadline, boards } = payload
