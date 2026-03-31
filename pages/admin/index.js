@@ -78,6 +78,8 @@ export default function Admin() {
   const [bonusParticipant, setBonusParticipant] = useState('')
   const [bonusPoints, setBonusPoints] = useState('')
   const [bonusNote, setBonusNote] = useState('')
+  const [fetchingRound, setFetchingRound] = useState(null) // roundId being fetched
+  const [fetchPreview, setFetchPreview] = useState({})    // roundId -> fetched results array
 
   useEffect(() => { if (auth) loadAll() }, [auth])
 
@@ -185,6 +187,51 @@ export default function Admin() {
       await loadAll()
       flash('Result cleared — points reset to 0')
     } catch (e) { flash('Error: ' + e.message) }
+    setLoading(false)
+  }
+
+  async function fetchResultsFromFIDE(round) {
+    setFetchingRound(round.id)
+    try {
+      const games = round.games.map(g => ({
+        board_number: g.board_number,
+        game_id: g.id,
+        white_player: g.white_player?.name || '',
+        black_player: g.black_player?.name || '',
+      }))
+      const res = await fetch('/api/admin/fetch-results', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': sessionStorage.getItem('adminPw') || '',
+        },
+        body: JSON.stringify({ round_number: round.round_number, games }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setFetchPreview(prev => ({ ...prev, [round.id]: data }))
+      flash(data.note || '✓ Results fetched')
+    } catch (e) {
+      flash('Error fetching: ' + e.message)
+    }
+    setFetchingRound(null)
+  }
+
+  async function applyFetchedResults(round) {
+    const preview = fetchPreview[round.id]
+    if (!preview) return
+    setLoading(true)
+    let applied = 0
+    for (const r of preview.results) {
+      if (!r.result || !r.game_id) continue
+      try {
+        await adminAction('setResult', { gameId: r.game_id, result: r.result })
+        applied++
+      } catch (e) { console.error(e) }
+    }
+    await loadAll()
+    setFetchPreview(prev => { const n = {...prev}; delete n[round.id]; return n })
+    flash(`✓ Applied ${applied} result${applied !== 1 ? 's' : ''} and updated all scores`)
     setLoading(false)
   }
 
@@ -351,13 +398,62 @@ export default function Admin() {
             <div key={round.id} style={s.card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h3 style={{ fontFamily: 'Playfair Display', fontSize: 18 }}>Round {round.round_number} <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text2)' }}>{round.round_date}</span></h3>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => fetchResultsFromFIDE(round)}
+                    disabled={fetchingRound === round.id || loading}
+                    style={{ padding: '4px 14px', borderRadius: 6, fontSize: 12, cursor: (fetchingRound === round.id || loading) ? 'not-allowed' : 'pointer', background: 'none', border: '1px solid rgba(201,168,76,0.5)', color: 'var(--gold)', fontFamily: 'DM Sans', opacity: (fetchingRound === round.id || loading) ? 0.6 : 1 }}>
+                    {fetchingRound === round.id ? '⏳ Fetching...' : '⬇ Auto-fetch from FIDE'}
+                  </button>
                   {round.is_complete
                     ? <><span style={{ fontSize: 12, color: 'var(--green)' }}>✓ Complete</span><button onClick={() => markRoundComplete(round, false)} style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--text3)', fontFamily: 'DM Sans' }}>Reopen</button></>
                     : <button onClick={() => markRoundComplete(round, true)} style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'none', border: '1px solid rgba(76,175,120,0.4)', color: 'var(--green)', fontFamily: 'DM Sans' }}>Mark complete</button>}
                 </div>
               </div>
               {round.games.length === 0 && <p style={{ fontSize: 13, color: 'var(--text3)' }}>No games for this round.</p>}
+
+              {/* Auto-fetch preview panel */}
+              {fetchPreview[round.id] && (
+                <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.3)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <p style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 500 }}>
+                      ⬇ Fetched from FIDE — {fetchPreview[round.id].note}
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => applyFetchedResults(round)}
+                        disabled={loading || !fetchPreview[round.id].results.some(r => r.result)}
+                        style={{ padding: '5px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'var(--gold)', border: 'none', color: '#0a0a0a', fontFamily: 'DM Sans', fontWeight: 500, opacity: loading ? 0.6 : 1 }}>
+                        {loading ? 'Applying...' : 'Apply all ✓'}
+                      </button>
+                      <button
+                        onClick={() => setFetchPreview(prev => { const n={...prev}; delete n[round.id]; return n })}
+                        style={{ padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--text3)', fontFamily: 'DM Sans' }}>
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                  {fetchPreview[round.id].results.map(r => (
+                    <div key={r.board_number} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0', borderTop: '1px solid rgba(201,168,76,0.15)', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text3)', minWidth: 55 }}>Board {r.board_number}</span>
+                      <span style={{ flex: 1 }}>{r.white_player}</span>
+                      {r.result ? (
+                        <span style={{ padding: '2px 10px', borderRadius: 4, fontSize: 12, fontFamily: 'DM Mono', fontWeight: 500,
+                          background: r.result === 'draw' ? 'var(--draw)' : r.result === 'white' ? '#e8f4e8' : '#1a1a1a',
+                          color: r.result === 'draw' ? 'var(--draw-text)' : r.result === 'white' ? '#1a4a1a' : '#ccc',
+                          border: r.result === 'black' ? '1px solid #444' : 'none',
+                        }}>
+                          {r.result === 'white' ? '1–0' : r.result === 'black' ? '0–1' : '½–½'}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--text3)', fontStyle: 'italic' }}>not found / in progress</span>
+                      )}
+                      <span style={{ flex: 1, textAlign: 'right' }}>{r.black_player}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {round.games.map(game => (
                 <div key={game.id} style={{ display: 'grid', gridTemplateColumns: '55px 1fr auto 1fr', gap: 12, alignItems: 'center', padding: '12px 0', borderTop: '1px solid var(--border)' }}>
                   <span style={{ fontSize: 11, color: 'var(--text3)' }}>Board {game.board_number}</span>
