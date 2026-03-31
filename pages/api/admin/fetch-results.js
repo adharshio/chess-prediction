@@ -6,17 +6,29 @@ function isAuthorized(req) {
   return token && token === process.env.ADMIN_PASSWORD
 }
 
-// Normalise player name for fuzzy matching
-// Handles "Praggnanandhaa R" vs "R Praggnanandhaa", "Blübaum" vs "Bluebaum" etc.
+// Normalise player name for robust fuzzy matching.
+// Core problem solved here: "Blübaum" (DB) vs "Bluebaum" (FIDE site).
+// NFD + diacritic strip: ü→u giving "blubaum", but "bluebaum" stays "bluebaum" — no match.
+// Fix: after stripping diacritics, also collapse German umlaut expansions (ue→u, ae→a, oe→o).
+// Result: both "blübaum" and "bluebaum" normalise to "blubaum" — they match.
 function normaliseName(name) {
-  return name
+  const stripped = name
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // strip accents: ü→u, é→e
+    .replace(/[\u0300-\u036f]/g, '') // ü→u, é→e, ñ→n etc.
     .replace(/[^a-z\s]/g, '')
     .trim()
+
+  // Collapse German umlaut expansions so both spellings converge:
+  // "bluebaum" → "blubaum", "blübaum" → "blubaum"
+  const collapsed = stripped
+    .replace(/ue/g, 'u')
+    .replace(/ae/g, 'a')
+    .replace(/oe/g, 'o')
+
+  return collapsed
     .split(/\s+/)
-    .sort()  // sort tokens so "R Praggnanandhaa" == "Praggnanandhaa R"
+    .sort() // sort tokens: "R Praggnanandhaa" == "Praggnanandhaa R"
     .join(' ')
 }
 
@@ -24,7 +36,7 @@ function namesMatch(a, b) {
   const na = normaliseName(a)
   const nb = normaliseName(b)
   if (na === nb) return true
-  // Check if one contains all tokens of the other (handles partial names)
+  // Token subset check handles partial names
   const ta = na.split(' ')
   const tb = nb.split(' ')
   return ta.every(t => nb.includes(t)) || tb.every(t => na.includes(t))
